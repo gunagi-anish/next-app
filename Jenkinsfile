@@ -1,33 +1,30 @@
-pipeline {
-    agent any 
+node {
+    def appDir='/var/www/nextjs-app'
 
-    environment {
-        VERCEL_TOKEN=credentials('vercel_token')
+    stage('Clen Workspace') {
+        echo 'Cleaning workspace...'
+        deleteDir()
     }
 
-    stages {
-        stage('Install') {
-            steps {
-                sh 'npm install'
-            }
-        }
+    stage('Clone repo') {
+        echo 'Cloning repository...'
+        git(
+            branch: 'master',
+            url: 'https://github.com/gunagi-anish/next-app.git'
+        )
+    }
 
-        stage('Test') {
-            steps {
-                echo "Skipping tests - no test scripts found"
-            }
-        }
-
-        stage('Build') {
-            steps {
-                sh 'npm run build'
-            }
-        }
-
-        stage('Deploy') {
-            steps {
-                sh 'npx vercel --prod --yes --token=$VERCEL_TOKEN'
-            }
-        }
+    stage('Deploy to EC2') {
+        echo 'Deploying to EC2...'
+        sh """
+            sudo mkdir -p ${appDir}
+            sudo chown -R jenkins:jenkins ${appDir}
+            rsync -av --delete --exclude='.git' --exclude='node_modules' ./ ${appDir}
+            cd ${appDir}
+            sudo npm install
+            sudo npm run build
+            sudo fuser -k 3000/tcp || true
+            npm run start
+        """
     }
 }
